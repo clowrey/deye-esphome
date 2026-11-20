@@ -22,7 +22,7 @@ Started from [slipx06/Sunsynk-Home-Assistant-Dash](https://github.com/slipx06/Su
 packages:
   deye:
     url: https://github.com/clowrey/deye-esphome
-    ref: v1.3.0
+    ref: v1.3.1
     files:
       - common/rs485-modbus.yaml
       - common/diagnostics.yaml
@@ -64,6 +64,12 @@ a new entity at every site and its old history stops. So:
 - Sites move to a new version by changing `ref:`, one site at a time.
 
 ## Changes
+
+- **v1.3.1** (2026-11-19): **clock sync fix.** ESPHome 2026 no longer sets the C library's TZ on ESP32, so the
+  `::localtime()` in the hourly clock sync (and the manual "Sync Time") returned UTC and set the inverter clock 10 h
+  fast in Hawaii. The inverter's day counters then rolled over mid-afternoon and its time-of-use programs ran on UTC.
+  Both now take local time from `homeassistant_time`, skip until it is valid, and the clock is also set once as soon
+  as Home Assistant's time arrives after boot. Any site on v1.0.0-v1.3.0 should move to this.
 
 - **v1.3.0** (2026-11-19): `common/register-sweep.yaml`, the read-only register sweep. README: the 12K US files also fit
   the Sol-Ark 15K-2P, with its hydro/wind registers.

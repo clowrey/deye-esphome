@@ -14,7 +14,7 @@ esp32:
 packages:
   deye:
     url: https://github.com/clowrey/deye-esphome
-    ref: v1.3.0
+    ref: v1.3.1
     files:
       - common/rs485-modbus.yaml
       - common/diagnostics.yaml

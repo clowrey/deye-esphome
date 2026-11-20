@@ -12,6 +12,19 @@ substitutions:
 time:
   - platform: homeassistant
     id: homeassistant_time
+    # Set the inverter clock once as soon as Home Assistant's time arrives after boot, then hourly (interval below).
+    on_time_sync:
+      then:
+        - if:
+            condition:
+              lambda: "return !id(deye_clock_synced);"
+            then:
+              - script.execute: deye_sync_clock
+
+globals:
+  - id: deye_clock_synced
+    type: bool
+    initial_value: "false"
 
 uart:
   id: mod_bus
@@ -43,17 +56,23 @@ modbus_controller:
 interval:
   - interval: 3600s
     then:
+      - script.execute: deye_sync_clock
+
+script:
+  - id: deye_sync_clock
+    then:
       - lambda: |-
           esphome::modbus_controller::ModbusController *controller = id(inverter);
-          time_t now = ::time(nullptr);
-          struct tm *time_info = ::localtime(&now);
-          int seconds = time_info->tm_sec;
-          int minutes = time_info->tm_min;
-          int hour = time_info->tm_hour;
-          int day = time_info->tm_mday;
-          int month = time_info->tm_mon + 1;
-          int year = time_info->tm_year;
-          year = year + 1900;
+          // Local time from ESPHome's clock. ESPHome 2026 converts time zones itself and no longer sets the C
+          // library's TZ on ESP32, so ::localtime() returns UTC and the inverter would run 10+ hours off.
+          auto local = id(homeassistant_time).now();
+          if (!local.is_valid()) return;
+          int seconds = local.second;
+          int minutes = local.minute;
+          int hour = local.hour;
+          int day = local.day_of_month;
+          int month = local.month;
+          int year = local.year;
           int year1 = year - 2000;
           
           uint16_t reg22_value = (year1 << 8) | month;
@@ -65,6 +84,7 @@ interval:
             esphome::modbus_controller::ModbusCommandItem set_rtc_command =
                 esphome::modbus_controller::ModbusCommandItem::create_write_multiple_command(controller, 22, rtc_data.size(), rtc_data);
             controller->queue_command(set_rtc_command);
+            id(deye_clock_synced) = true;
             ESP_LOGI("Time Sync", "Seconds: %d, Minutes: %d, Hour: %d, Day: %d, Month: %d, Year: %d", seconds, minutes, hour, day, month, year);
           }
 

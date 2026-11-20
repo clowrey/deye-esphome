@@ -25,15 +25,16 @@ binary_sensor:
       then:
         - lambda: |-
             esphome::modbus_controller::ModbusController *controller = id(inverter);
-            time_t now = ::time(nullptr);
-            struct tm *time_info = ::localtime(&now);
-            int seconds = time_info->tm_sec;
-            int minutes = time_info->tm_min;
-            int hour = time_info->tm_hour;
-            int day = time_info->tm_mday;
-            int month = time_info->tm_mon + 1;
-            int year = time_info->tm_year;
-            year = year + 1900;
+            // Local time from ESPHome's clock. ESPHome 2026 converts time zones itself and no longer sets the C
+            // library's TZ on ESP32, so ::localtime() returns UTC and the inverter would run 10+ hours off.
+            auto local = id(homeassistant_time).now();
+            if (!local.is_valid()) return;
+            int seconds = local.second;
+            int minutes = local.minute;
+            int hour = local.hour;
+            int day = local.day_of_month;
+            int month = local.month;
+            int year = local.year;
             int year1 = year - 2000;
             
             uint16_t reg22_value = (year1 << 8) | month;
