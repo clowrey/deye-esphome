@@ -1,10 +1,10 @@
 # Deye / Sunsynk / Sol-Ark 12K US split-phase hybrid: Modbus registers over RS485/RS232.
 # Include with common/rs485-modbus.yaml. Entity names here are fixed on purpose: Home Assistant keys each
 # entity's history on the device and its name, so renaming one starts a new entity and drops its history.
-# Substitutions used: modbus_controller_id, settings_skipped_updates, battery_current_multiply.
+# Substitutions used: modbus_controller_id, slow_controller_id, battery_current_multiply.
 substitutions:
   modbus_controller_id: inverter
-  settings_skipped_updates: "30"
+  slow_controller_id: inverter_slow
   battery_current_multiply: "0.1"
 
 
@@ -1173,56 +1173,50 @@ sensor:
       - multiply:  0.1
 
   - platform: modbus_controller            # 250 Prog1 Time
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     name: "Prog1 Time"
     id: inverter_esphome_system_mode_time1
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     address: 250
     icon: "mdi:clock"
 
   - platform: modbus_controller            # 251 Prog2 Time
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     name: "Prog2 Time"
     id: inverter_esphome_system_mode_time2
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     address: 251   
     icon: "mdi:clock"
 
   - platform: modbus_controller            # 252 Prog3 Time
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     name: "Prog3 Time"
     id: inverter_esphome_system_mode_time3
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     address: 252
     icon: "mdi:clock"
 
   - platform: modbus_controller            # 253 Prog4 Time
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     name: "Prog4 Time"
     id: inverter_esphome_system_mode_time4
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     address: 253
     icon: "mdi:clock"
 
   - platform: modbus_controller            # 254 Prog5 Time
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     name: "Prog5 Time"
     id: inverter_esphome_system_mode_time5
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     address: 254
     icon: "mdi:clock"
 
   - platform: modbus_controller            # 255 Prog6 Time
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     name: "Prog6 Time"
     id: inverter_esphome_system_mode_time6
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     address: 255
     icon: "mdi:clock"
 
@@ -1283,22 +1277,20 @@ sensor:
     internal: true
 
   - platform: modbus_controller            # 16 raw register value
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     id: reg_16_raw
     register_type: holding
     address: 16
     value_type: U_WORD
     internal: true
-    skip_updates: ${settings_skipped_updates}
 
   - platform: modbus_controller            # 17 raw register value
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     id: reg_17_raw
     register_type: holding
     address: 17
     value_type: U_WORD
     internal: true
-    skip_updates: ${settings_skipped_updates}
 
 
 switch:
@@ -1993,47 +1985,42 @@ text_sensor:
       }
 
   - platform: modbus_controller            # 103 Fault information word 1 
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     name: "Fault information word 1"
     #id: inverter_esphome_overall_state
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     raw_encode: HEXBYTES
     address: 103
 
   - platform: modbus_controller            # 104 Fault information word 2 
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     name: "Fault information word 2"
     #id: inverter_esphome_overall_state
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     raw_encode: HEXBYTES
     address: 104
 
   - platform: modbus_controller            # 105 Fault information word 3 
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     name: "Fault information word 3"
     #id: inverter_esphome_overall_state
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     raw_encode: HEXBYTES
     address: 105
 
   - platform: modbus_controller            # 106 Fault information word 4 
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     name: "Fault information word 4"
     #id: inverter_esphome_overall_state
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     raw_encode: HEXBYTES
     address: 106
 
   - platform: modbus_controller            # 059 Overall State
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     name: "Overall Status"
     id: inverter_esphome_overall_state
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     raw_encode: HEXBYTES
     address: 59
     lambda: |- 
@@ -2150,13 +2137,11 @@ text_sensor:
         return esphome::optional<std::string>(formatted_time);
 
   - platform: modbus_controller            # 003-007 Inverter HEX Serial Number
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     id: inverter_esphome_serial
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     raw_encode: HEXBYTES
     address: 003
-    register_count: 5
     response_size: 10
     internal: true
 
@@ -2178,19 +2163,17 @@ text_sensor:
       return asciiData;
 
   - platform: modbus_controller            # 013 Inverter MCU Firmware Version
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     id: inverter_esphome_MCU_version_13
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     raw_encode: HEXBYTES
     address: 013
     internal: true
 
   - platform: modbus_controller            # 015 Inverter MCU Firmware Version
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     id: inverter_esphome_MCU_version_15
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     raw_encode: HEXBYTES
     address: 015
     internal: true
@@ -2203,11 +2186,10 @@ text_sensor:
       return id( inverter_esphome_MCU_version_15).state + "-" + id(inverter_esphome_MCU_version_13).state;
 
   - platform: modbus_controller             # 016 Inverter LCD Firmware Version
-    modbus_controller_id: inverter
+    modbus_controller_id: ${slow_controller_id}
     id: inverter_esphome_comm_lcd_firmware_16
     name: "COMM Version"
     register_type: holding
-    skip_updates: ${settings_skipped_updates}
     raw_encode: HEXBYTES
     icon: "mdi:text"
     address: 016

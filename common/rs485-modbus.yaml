@@ -1,9 +1,13 @@
 # RS485/RS232 to the inverter's Modbus port, polling, and an hourly clock sync from Home Assistant.
-# Substitutions: tx_pin, rx_pin (ESP GPIOs to the transceiver), modbus_address (the inverter's Modbus ID).
+# Substitutions: tx_pin, rx_pin (ESP GPIOs to the transceiver), modbus_address (the inverter's Modbus ID),
+# modbus_turnaround (pause after each reply before the next request), settings_update_interval (how often the
+# slow controller reads settings times, firmware versions, fault words and status).
 substitutions:
   tx_pin: "6"
   rx_pin: "5"
   modbus_address: "0x01"
+  modbus_turnaround: 50ms
+  settings_update_interval: 90s
 
 time:
   - platform: homeassistant
@@ -18,6 +22,9 @@ uart:
 
 modbus:
   id: inverter_modbus
+  # ESPHome 2026 defaults to 600 ms here, which stretches a 3 s poll of ~40 register blocks to well over 20 s.
+  # 50 ms is the spacing these inverters ran with for years (the old modbus_controller throttle setting).
+  turnaround_time: ${modbus_turnaround}
 
 modbus_controller:
   - id: inverter
@@ -25,7 +32,13 @@ modbus_controller:
     modbus_id: inverter_modbus
     setup_priority: -10
     update_interval: "3s"
-    command_throttle: "50ms"
+  # Second controller on the same inverter for registers that rarely change (replaces skip_updates, which
+  # ESPHome 2026 ignores: those registers were read every 3 s).
+  - id: inverter_slow
+    address: ${modbus_address}
+    modbus_id: inverter_modbus
+    setup_priority: -10
+    update_interval: ${settings_update_interval}
 
 interval:
   - interval: 3600s

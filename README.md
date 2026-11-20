@@ -20,7 +20,7 @@ Started from [slipx06/Sunsynk-Home-Assistant-Dash](https://github.com/slipx06/Su
 packages:
   deye:
     url: https://github.com/clowrey/deye-esphome
-    ref: v1.0.0
+    ref: v1.1.0
     files:
       - common/rs485-modbus.yaml
       - common/diagnostics.yaml
@@ -33,8 +33,10 @@ Substitutions, each with a default in the package and overridable in the site's 
 |---|---|---|
 | `tx_pin`, `rx_pin` | `6`, `5` | ESP GPIOs to the RS485/RS232 transceiver |
 | `modbus_address` | `0x01` | the inverter's Modbus ID (set each inverter differently when several share a bus) |
-| `modbus_controller_id` | `inverter` | id of the controller the register entities use |
-| `settings_skipped_updates` | `30` | settings and text sensors are read once every N polls |
+| `modbus_controller_id` | `inverter` | id of the controller the register entities use (polled every 3 s) |
+| `slow_controller_id` | `inverter_slow` | id of the second controller, for registers that rarely change |
+| `settings_update_interval` | `90s` | how often the slow controller polls (program times, versions, fault words, status) |
+| `modbus_turnaround` | `50ms` | pause after each reply before the next request (ESPHome's own default is 600 ms) |
 | `battery_current_multiply` | `0.1` | register 191 scale: 0.1 on most 12K US firmware, 0.01 on some |
 
 ## Keeping history when changing these files
@@ -49,6 +51,11 @@ a new entity at every site and its old history stops. So:
 
 ## Changes
 
+- **v1.1.0** (2026-11-19): for ESPHome 2026, which ignores `command_throttle` and `skip_updates`. Modbus
+  `turnaround_time` set to 50 ms (ESPHome's 600 ms default made each 3 s poll take far longer). The 17 registers
+  that used `skip_updates` now sit on a second controller, `inverter_slow`, polled every 90 s; before this they were
+  read every 3 s. `register_count` dropped from the serial-number read. No entity renamed or removed.
+  Sites drop their `settings_skipped_updates` substitution.
 - **v1.0.0** (2026-11-19): first release. Number settings use `mode: box` (typed values, no accidental slider drags).
   `Overall Status` uses `modbus::helpers::word_from_hex_str` (ESPHome 2026 moved it from `modbus_controller::`).
   Wi-Fi signal and uptime added.
