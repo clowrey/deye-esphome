@@ -12,9 +12,12 @@ substitutions:
 time:
   - platform: homeassistant
     id: homeassistant_time
-    # Set the inverter clock once as soon as Home Assistant's time arrives after boot, then hourly (interval below).
+    # The inverter clock is written only after Home Assistant's time has arrived: right after boot the ESP's own
+    # clock can already count as valid but be hours off (seen: 22:37 written at 15:51). Once on the first sync,
+    # then hourly (interval below).
     on_time_sync:
       then:
+        - lambda: "id(deye_ha_time_ok) = true;"
         - if:
             condition:
               lambda: "return !id(deye_clock_synced);"
@@ -22,6 +25,9 @@ time:
               - script.execute: deye_sync_clock
 
 globals:
+  - id: deye_ha_time_ok
+    type: bool
+    initial_value: "false"
   - id: deye_clock_synced
     type: bool
     initial_value: "false"
@@ -65,6 +71,7 @@ script:
           esphome::modbus_controller::ModbusController *controller = id(inverter);
           // Local time from ESPHome's clock. ESPHome 2026 converts time zones itself and no longer sets the C
           // library's TZ on ESP32, so ::localtime() returns UTC and the inverter would run 10+ hours off.
+          if (!id(deye_ha_time_ok)) return;
           auto local = id(homeassistant_time).now();
           if (!local.is_valid()) return;
           int seconds = local.second;

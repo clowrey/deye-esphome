@@ -22,7 +22,7 @@ Started from [slipx06/Sunsynk-Home-Assistant-Dash](https://github.com/slipx06/Su
 packages:
   deye:
     url: https://github.com/clowrey/deye-esphome
-    ref: v1.3.1
+    ref: v1.3.2
     files:
       - common/rs485-modbus.yaml
       - common/diagnostics.yaml
@@ -64,6 +64,10 @@ a new entity at every site and its old history stops. So:
 - Sites move to a new version by changing `ref:`, one site at a time.
 
 ## Changes
+
+- **v1.3.2** (2026-11-19): the clock is written only after Home Assistant's time has arrived. Right after an OTA
+  reboot the ESP's own clock can count as valid while hours off: v1.3.1 wrote 22:37 at 15:51 that way, and its
+  one-time sync then skipped the correct time. v1.3.0 and v1.3.1 should both move to this.
 
 - **v1.3.1** (2026-11-19): **clock sync fix.** ESPHome 2026 no longer sets the C library's TZ on ESP32, so the
   `::localtime()` in the hourly clock sync (and the manual "Sync Time") returned UTC and set the inverter clock 10 h
