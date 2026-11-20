@@ -12,6 +12,7 @@ Started from [slipx06/Sunsynk-Home-Assistant-Dash](https://github.com/slipx06/Su
 | `common/rs485-modbus.yaml` | UART, Modbus, the polling controller (3 s, 50 ms between commands), Home Assistant time, hourly inverter clock sync |
 | `common/diagnostics.yaml` | Wi-Fi signal and uptime |
 | `models/12k-us/registers.yaml` | 12K US split-phase: about 185 sensors, switches, numbers, selects and text sensors |
+| `models/12k-us/faults.yaml` | 12K US fault and warning decoding: F01-F64 names, a "Fault" event, fault count and last codes, optional log to Home Assistant |
 | `examples/12k-us.yaml` | A minimal site config using the three files above |
 
 ## Using it
@@ -20,11 +21,12 @@ Started from [slipx06/Sunsynk-Home-Assistant-Dash](https://github.com/slipx06/Su
 packages:
   deye:
     url: https://github.com/clowrey/deye-esphome
-    ref: v1.1.0
+    ref: v1.2.0
     files:
       - common/rs485-modbus.yaml
       - common/diagnostics.yaml
       - models/12k-us/registers.yaml
+      - models/12k-us/faults.yaml
 ```
 
 Substitutions, each with a default in the package and overridable in the site's `substitutions:`:
@@ -36,6 +38,7 @@ Substitutions, each with a default in the package and overridable in the site's 
 | `modbus_controller_id` | `inverter` | id of the controller the register entities use (polled every 3 s) |
 | `slow_controller_id` | `inverter_slow` | id of the second controller, for registers that rarely change |
 | `settings_update_interval` | `90s` | how often the slow controller polls (program times, versions, fault words, status) |
+| `fault_log_notify_entity` | `""` | a Home Assistant notify entity (e.g. `notify.file`) that gets one line per fault set or cleared; empty = off |
 | `modbus_turnaround` | `50ms` | pause after each reply before the next request (ESPHome's own default is 600 ms) |
 | `battery_current_multiply` | `0.1` | register 191 scale: 0.1 on most 12K US firmware, 0.01 on some |
 
@@ -50,6 +53,12 @@ a new entity at every site and its old history stops. So:
 - Sites move to a new version by changing `ref:`, one site at a time.
 
 ## Changes
+
+- **v1.2.0** (2026-11-19): `models/12k-us/faults.yaml`. Fault words 103-106 decoded to F01-F64 with the 12K US
+  firmware's own fault names ("Fault information complete register", "Fault Codes"), read every 3 s in one request;
+  a "Fault" event per newly set code, "Fault Count" (kept across reboots), "Fault Last Codes", "Fault Code Highest";
+  warning words 101-102 decoded as "Warning Codes". Same entity names as the 50K three-phase config, so alerts
+  carry over. "Overall Status" back on the 3 s poll (it drives status alerts).
 
 - **v1.1.0** (2026-11-19): for ESPHome 2026, which ignores `command_throttle` and `skip_updates`. Modbus
   `turnaround_time` set to 50 ms (ESPHome's 600 ms default made each 3 s poll take far longer). The 17 registers

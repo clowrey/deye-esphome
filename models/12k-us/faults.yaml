@@ -1,0 +1,254 @@
+# Deye / Sunsynk / Sol-Ark 12K US: fault and warning decoding. Include with registers.yaml (or on its own, with
+# common/rs485-modbus.yaml). Entity names match the 50K three-phase config, so one set of Home Assistant alerts
+# fits both models.
+#
+# Registers 103-106: fault information words 1-4, 64 bit flags. Bit n (0-based) of word w = F(w*16 + n + 1),
+# e.g. register 106 = 512 (bit 9) => F58. Fault names are the 12K US display firmware's own (MCU1 C384 strings,
+# in F01..F64 order); bit 7 of 103 = F08 GFDI relay failure agrees with the inverter's documentation.
+# Registers 101-102: warning words 1-2 (bit 1 fan warning, bit 2 grid phase wrong, ...), names from the same firmware.
+#
+# Read every poll of the main controller (3 s), all four words in one request. Each newly set code fires the
+# "Fault" event (event_type F01..F64), bumps "Fault Count" (kept across reboots) and updates "Fault Last Codes"
+# and "Fault Code Highest". Set and cleared codes are also sent to Home Assistant as a notify message when
+# fault_log_notify_entity is set (e.g. notify.file with the File integration writing a log file); the device needs
+# "Allow the device to perform Home Assistant actions" ticked for that.
+substitutions:
+  modbus_controller_id: inverter
+  fault_log_notify_entity: ""
+
+globals:
+  - id: inverter_fault_mask          # F01..F64 as bits 0..63
+    type: uint64_t
+    initial_value: '0'
+  - id: inverter_fault_mask_prev
+    type: uint64_t
+    initial_value: '0'
+  - id: inverter_fault_count_total
+    type: uint32_t
+    restore_value: true
+    initial_value: '0'
+  - id: inverter_fault_first_read    # faults already active at boot are reported, not counted
+    type: bool
+    initial_value: 'true'
+
+event:
+  - platform: template
+    name: "Fault"
+    id: inverter_fault_event
+    icon: "mdi:alert-octagon"
+    event_types: [F01, F02, F03, F04, F05, F06, F07, F08, F09, F10, F11, F12, F13, F14, F15, F16,
+                  F17, F18, F19, F20, F21, F22, F23, F24, F25, F26, F27, F28, F29, F30, F31, F32,
+                  F33, F34, F35, F36, F37, F38, F39, F40, F41, F42, F43, F44, F45, F46, F47, F48,
+                  F49, F50, F51, F52, F53, F54, F55, F56, F57, F58, F59, F60, F61, F62, F63, F64]
+
+script:
+  # One line to Home Assistant per change. Waits for the API so lines from an outage are not lost.
+  - id: fault_log_write
+    mode: queued
+    max_runs: 20
+    parameters:
+      line: string
+    then:
+      - logger.log:
+          level: WARN
+          tag: fault
+          format: "%s"
+          args: ['line.c_str()']
+      - if:
+          condition:
+            lambda: return strlen("${fault_log_notify_entity}") > 0;
+          then:
+            - wait_until:
+                condition:
+                  api.connected:
+            - delay: 30s
+            - homeassistant.action:
+                action: notify.send_message
+                data:
+                  entity_id: ${fault_log_notify_entity}
+                  title: Inverter fault log
+                  message: !lambda return line;
+
+sensor:
+  - platform: template
+    name: "Fault Count"
+    id: inverter_fault_count
+    icon: "mdi:counter"
+    accuracy_decimals: 0
+    state_class: total_increasing
+    lambda: return id(inverter_fault_count_total);
+    update_interval: 60s
+
+  - platform: template
+    name: "Fault Code Highest"
+    id: inverter_fault_code_highest
+    icon: "mdi:alert-circle-outline"
+    accuracy_decimals: 0
+    update_interval: never
+
+text_sensor:
+  - platform: modbus_controller           # 103-106 decoded with names
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Fault information complete register"
+    id: inverter_fault_codes
+    register_type: holding
+    address: 103
+    response_size: 8
+    raw_encode: HEXBYTES
+    icon: "mdi:alert-circle-outline"
+    lambda: |-
+      static const char *const FAULTS[64] = {
+        "DC inversed failure", "DC insulation failure", "GFDI failure", "GFDI ground failure",
+        "EEPROM read failure", "EEPROM write failure", "DC/DC soft start fault", "GFDI relay failure",
+        "IGBT failure", "Aux power board failure", "AC main contactor failure", "AC slave contactor failure",
+        "Grid mode changed", "DC over current fault", "SW AC over current fault", "GFCI failure",
+        "Active battery hold", "HW AC over current fault", "Tz integration fault", "Tz DC over current fault",
+        "Tz GFDI over current fault", "Tz emergency stop fault", "Tz GFCI over current fault", "DC insulation fault",
+        "Grid wake up failed", "Bus unbalance fault", "PV or grid wake up failed", "DCI over M1 fault",
+        "Parallel CAN bus fault", "AC main contactor fault", "Soft start failed", "DCI over M2 fault",
+        "AC over current fault", "AC overload fault", "AC no utility fault", "AC grid phase sequence fault",
+        "DC LLC soft over current", "AC current unbalance fault", "DC LLC over current", "Battery over current",
+        "Parallel system stop", "AC WU under voltage fault", "AC VW over voltage fault", "AC VW under voltage fault",
+        "AC UV over voltage fault", "Backup battery fault", "AC over frequency fault", "AC under frequency fault",
+        "Backup battery fault", "AC V grid current DC high fault", "Battery temperature high", "AC A inductor current DC high fault",
+        "AC B inductor current DC high fault", "AC C inductor current DC high fault", "DC voltage high fault", "DC voltage low fault",
+        "AC backfeed fault", "BMS communication fault", "AC V grid current high fault", "Generator voltage or frequency fault",
+        "Button manual off", "DRMs stop", "Arc fault", "Heatsink high temperature fault"
+      };
+      if (x.size() < 16) return std::string("invalid data");
+      std::string out;
+      for (uint8_t w = 0; w < 4; w++) {
+        uint16_t word = modbus::helpers::word_from_hex_str(x, w * 2);
+        for (uint8_t b = 0; b < 16; b++) {
+          if (word & (1u << b)) {
+            uint8_t n = w * 16 + b;
+            char code[5];
+            snprintf(code, sizeof(code), "F%02u", n + 1);
+            if (!out.empty()) out += ", ";
+            out += code;
+            out += " ";
+            out += FAULTS[n];
+          }
+        }
+      }
+      if (out.empty()) return std::string("OK");
+      if (out.size() > 255) out.resize(255);  // Home Assistant state length limit
+      return out;
+
+  - platform: modbus_controller           # 103-106 codes only ("OK" or "F13, F58"); drives the event and counters
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Fault Codes"
+    id: inverter_fault_codes_short
+    register_type: holding
+    address: 103
+    response_size: 8
+    raw_encode: HEXBYTES
+    icon: "mdi:alert-circle-outline"
+    lambda: |-
+      if (x.size() < 16) return {};
+      uint64_t mask = 0;
+      for (uint8_t w = 0; w < 4; w++)
+        mask |= uint64_t(modbus::helpers::word_from_hex_str(x, w * 2)) << (w * 16);
+      id(inverter_fault_mask) = mask;
+      std::string out;
+      for (uint8_t n = 0; n < 64; n++) {
+        if (mask & (1ULL << n)) {
+          char code[5];
+          snprintf(code, sizeof(code), "F%02u", n + 1);
+          if (!out.empty()) out += ", ";
+          out += code;
+        }
+      }
+      return out.empty() ? std::string("OK") : out;
+    on_value:
+      - lambda: |-
+          const uint64_t mask = id(inverter_fault_mask);
+          const uint64_t prev = id(inverter_fault_mask_prev);
+          id(inverter_fault_mask_prev) = mask;
+          uint8_t highest = 0;
+          for (uint8_t n = 0; n < 64; n++)
+            if (mask & (1ULL << n)) highest = n + 1;
+          if (id(inverter_fault_code_highest).state != highest)
+            id(inverter_fault_code_highest).publish_state(highest);
+          auto codes = [](uint64_t bits) {
+            std::string s;
+            for (uint8_t n = 0; n < 64; n++) {
+              if (bits & (1ULL << n)) {
+                char code[5];
+                snprintf(code, sizeof(code), "F%02u", n + 1);
+                if (!s.empty()) s += " ";
+                s += code;
+              }
+            }
+            return s;
+          };
+          auto now = id(homeassistant_time).now();
+          std::string stamp;
+          if (now.is_valid()) {
+            stamp = now.strftime("%Y-%m-%d %H:%M:%S");
+          } else {
+            char buf[24];
+            snprintf(buf, sizeof(buf), "uptime %us", unsigned(millis() / 1000));
+            stamp = buf;
+          }
+          if (id(inverter_fault_first_read)) {
+            id(inverter_fault_first_read) = false;
+            if (mask != 0) {
+              id(inverter_fault_last_codes).publish_state(x);
+              id(fault_log_write).execute(stamp + " | ACTIVE AT BOOT " + codes(mask) + " | active: " + x);
+            }
+            return;
+          }
+          const uint64_t rising = mask & ~prev;
+          const uint64_t falling = prev & ~mask;
+          if (falling != 0)
+            id(fault_log_write).execute(stamp + " | CLEARED " + codes(falling) + " | active: " + x);
+          if (rising == 0) return;
+          for (uint8_t n = 0; n < 64; n++) {
+            if (rising & (1ULL << n)) {
+              char code[5];
+              snprintf(code, sizeof(code), "F%02u", n + 1);
+              id(inverter_fault_event).trigger(code);
+              id(inverter_fault_count_total) += 1;
+            }
+          }
+          id(inverter_fault_count).publish_state(id(inverter_fault_count_total));
+          id(inverter_fault_last_codes).publish_state(x);
+          id(fault_log_write).execute(stamp + " | SET " + codes(rising) + " | active: " + x);
+
+  # Codes active the last time a new fault appeared; stays after the fault clears.
+  - platform: template
+    name: "Fault Last Codes"
+    id: inverter_fault_last_codes
+    icon: "mdi:alert-circle-check-outline"
+
+  - platform: modbus_controller           # 101-102 warning words, decoded ("OK" or "W02 Fan warning, ...")
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Warning Codes"
+    id: inverter_warning_codes
+    register_type: holding
+    address: 101
+    response_size: 4
+    raw_encode: HEXBYTES
+    icon: "mdi:alert-outline"
+    lambda: |-
+      static const char *const WARN1[9] = {
+        "Reserved", "Fan warning", "Grid phase wrong", "Meter communication fail", "PV1 warning",
+        "PV2 warning", "PV3 warning", "Fan stopped", "Grid type wrong"
+      };
+      if (x.size() < 8) return {};
+      std::string out;
+      for (uint8_t w = 0; w < 2; w++) {
+        uint16_t word = modbus::helpers::word_from_hex_str(x, w * 2);
+        for (uint8_t b = 0; b < 16; b++) {
+          if (word & (1u << b)) {
+            uint8_t n = w * 16 + b;
+            char code[5];
+            snprintf(code, sizeof(code), "W%02u", n + 1);
+            if (!out.empty()) out += ", ";
+            out += code;
+            if (n < 9) { out += " "; out += WARN1[n]; }
+          }
+        }
+      }
+      return out.empty() ? std::string("OK") : out;

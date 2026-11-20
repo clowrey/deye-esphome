@@ -2017,7 +2017,7 @@ text_sensor:
     address: 106
 
   - platform: modbus_controller            # 059 Overall State
-    modbus_controller_id: ${slow_controller_id}
+    modbus_controller_id: ${modbus_controller_id}
     name: "Overall Status"
     id: inverter_esphome_overall_state
     register_type: holding
