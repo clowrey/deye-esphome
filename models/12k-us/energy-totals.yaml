@@ -1,0 +1,31 @@
+# Inverter AC output energy: today and lifetime. Registers from the kellerza/sunsynk single-phase map, checked by
+# register sweep on a 12K US and a Sol-Ark 15K-2P (2026-11-19): both answer with plausible values.
+substitutions:
+  modbus_controller_id: inverter
+
+sensor:
+  - platform: modbus_controller            # 060 Day active energy (inverter AC output today)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Day Active Energy"
+    register_type: holding
+    address: 60
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 1
+    device_class: energy
+    state_class: total_increasing
+    value_type: S_WORD
+    filters:
+      - multiply: 0.1
+
+  - platform: modbus_controller            # 063-064 Total active energy (low word first)
+    modbus_controller_id: ${modbus_controller_id}
+    name: "Total Active Energy"
+    register_type: holding
+    address: 63
+    unit_of_measurement: "kWh"
+    accuracy_decimals: 1
+    device_class: energy
+    state_class: total_increasing
+    value_type: U_DWORD_R
+    filters:
+      - multiply: 0.1

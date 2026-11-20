@@ -13,6 +13,8 @@ Started from [slipx06/Sunsynk-Home-Assistant-Dash](https://github.com/slipx06/Su
 | `common/diagnostics.yaml` | Wi-Fi signal and uptime |
 | `common/register-sweep.yaml` | a "Register Sweep" button: reads holding registers one by one into the log, to find where a setting lives (read-only, idle until pressed) |
 | `models/12k-us/registers.yaml` | 12K US split-phase (also the Sol-Ark 15K-2P, see below): about 185 sensors, switches, numbers, selects and text sensors |
+| `models/12k-us/energy-totals.yaml` | inverter AC output energy today and lifetime (registers 60, 63-64) |
+| `models/12k-us/period-totals.yaml` | month and year PV and load energy (65, 66, 68-69, 87-88); 12K US only, a Sol-Ark 15K reads 0 |
 | `models/12k-us/faults.yaml` | 12K US fault and warning decoding: F01-F64 names, a "Fault" event, fault count and last codes, optional log to Home Assistant |
 | `examples/12k-us.yaml` | A minimal site config using the three files above |
 
@@ -22,7 +24,7 @@ Started from [slipx06/Sunsynk-Home-Assistant-Dash](https://github.com/slipx06/Su
 packages:
   deye:
     url: https://github.com/clowrey/deye-esphome
-    ref: v1.3.2
+    ref: v1.4.0
     files:
       - common/rs485-modbus.yaml
       - common/diagnostics.yaml
@@ -64,6 +66,12 @@ a new entity at every site and its old history stops. So:
 - Sites move to a new version by changing `ref:`, one site at a time.
 
 ## Changes
+
+- **v1.4.0** (2026-11-19): `energy-totals.yaml` and `period-totals.yaml`, read-only registers from the kellerza/sunsynk
+  single-phase map that the configs did not read, each checked by register sweep on a 12K US and a Sol-Ark 15K-2P.
+  Left out: writable settings (43 inverter enable, 53 max solar power, 206 grid trickle feed), 95 ambient temperature
+  and 61 day reactive energy (read 0), PV4 (none fitted), 67 and 98-99 (repeat the load values), 185 (unconfirmed),
+  603/611 (outside the swept range).
 
 - **v1.3.2** (2026-11-19): the clock is written only after Home Assistant's time has arrived. Right after an OTA
   reboot the ESP's own clock can count as valid while hours off: v1.3.1 wrote 22:37 at 15:51 that way, and its
