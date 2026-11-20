@@ -1,0 +1,10 @@
+# Wi-Fi signal and uptime, so a dropping link or a reboot shows up in Home Assistant's history.
+sensor:
+  - platform: wifi_signal
+    name: "WiFi Signal"
+    update_interval: 60s
+    entity_category: diagnostic
+  - platform: uptime
+    name: "Uptime"
+    update_interval: 60s
+    entity_category: diagnostic
