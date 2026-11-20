@@ -1,0 +1,44 @@
+# Read-only register sweep. Press the "Register Sweep" button (a diagnostic entity) and the ESP reads holding
+# registers sweep_start..sweep_end one at a time, every sweep_interval, logging each answer as "R<addr>=<value>"
+# (log tag "probe", level INFO). Addresses the inverter does not implement only log a Modbus error. Nothing is written.
+# Idle until pressed. One read per 200 ms keeps the controller's queue from overflowing alongside normal polling
+# (10 reads per 0.5 s lost most of them). 0-1299 takes about 4.5 minutes.
+#
+# Use: read the device log while it runs (esphome logs, or the Device Builder's Logs), then compare two sweeps taken
+# before and after changing one setting on the inverter's screen or in its app: the register that moved is that setting.
+substitutions:
+  modbus_controller_id: inverter
+  sweep_start: "0"
+  sweep_end: "1299"
+  sweep_interval: 200ms
+
+globals:
+  - id: probe_next
+    type: int
+    initial_value: '-1'
+
+button:
+  - platform: template
+    name: "Register Sweep"
+    id: register_sweep
+    icon: "mdi:magnify-scan"
+    entity_category: diagnostic
+    on_press:
+      - lambda: |-
+          id(probe_next) = ${sweep_start};
+          ESP_LOGI("probe", "sweep start %d-%d", ${sweep_start}, ${sweep_end});
+
+interval:
+  - interval: ${sweep_interval}
+    then:
+      - lambda: |-
+          if (id(probe_next) < 0) return;
+          if (id(probe_next) > ${sweep_end}) { id(probe_next) = -1; ESP_LOGI("probe", "sweep done"); return; }
+          const uint16_t a = id(probe_next);
+          auto cmd = esphome::modbus_controller::ModbusCommandItem::create_read_command(
+              id(${modbus_controller_id}), esphome::modbus::EntityType::HOLDING, a, 1,
+              [](auto type, uint16_t start, std::span<const uint8_t> data) {
+                if (data.size() >= 2) ESP_LOGI("probe", "R%u=%u", start, (unsigned) ((data[0] << 8) | data[1]));
+              });
+          id(${modbus_controller_id})->queue_command(cmd);
+          id(probe_next) += 1;

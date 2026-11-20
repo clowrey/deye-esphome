@@ -11,7 +11,8 @@ Started from [slipx06/Sunsynk-Home-Assistant-Dash](https://github.com/slipx06/Su
 |---|---|
 | `common/rs485-modbus.yaml` | UART, Modbus, the polling controller (3 s, 50 ms between commands), Home Assistant time, hourly inverter clock sync |
 | `common/diagnostics.yaml` | Wi-Fi signal and uptime |
-| `models/12k-us/registers.yaml` | 12K US split-phase: about 185 sensors, switches, numbers, selects and text sensors |
+| `common/register-sweep.yaml` | a "Register Sweep" button: reads holding registers one by one into the log, to find where a setting lives (read-only, idle until pressed) |
+| `models/12k-us/registers.yaml` | 12K US split-phase (also the Sol-Ark 15K-2P, see below): about 185 sensors, switches, numbers, selects and text sensors |
 | `models/12k-us/faults.yaml` | 12K US fault and warning decoding: F01-F64 names, a "Fault" event, fault count and last codes, optional log to Home Assistant |
 | `examples/12k-us.yaml` | A minimal site config using the three files above |
 
@@ -21,10 +22,11 @@ Started from [slipx06/Sunsynk-Home-Assistant-Dash](https://github.com/slipx06/Su
 packages:
   deye:
     url: https://github.com/clowrey/deye-esphome
-    ref: v1.2.0
+    ref: v1.3.0
     files:
       - common/rs485-modbus.yaml
       - common/diagnostics.yaml
+      - common/register-sweep.yaml
       - models/12k-us/registers.yaml
       - models/12k-us/faults.yaml
 ```
@@ -38,9 +40,18 @@ Substitutions, each with a default in the package and overridable in the site's 
 | `modbus_controller_id` | `inverter` | id of the controller the register entities use (polled every 3 s) |
 | `slow_controller_id` | `inverter_slow` | id of the second controller, for registers that rarely change |
 | `settings_update_interval` | `90s` | how often the slow controller polls (program times, versions, fault words, status) |
+| `sweep_start`, `sweep_end`, `sweep_interval` | `0`, `1299`, `200ms` | register sweep range and pace |
 | `fault_log_notify_entity` | `""` | a Home Assistant notify entity (e.g. `notify.file`) that gets one line per fault set or cleared; empty = off |
 | `modbus_turnaround` | `50ms` | pause after each reply before the next request (ESPHome's own default is 600 ms) |
 | `battery_current_multiply` | `0.1` | register 191 scale: 0.1 on most 12K US firmware, 0.01 on some |
+
+## Models covered by `models/12k-us`
+
+- Deye-made 12K US split-phase hybrids (Sunsynk / Deye SUN-12K US, display firmware C3xx).
+- **Sol-Ark 15K-2P (Limitless 15K-LV)**, MCU 7228, COMM 1452: a sweep of holding registers 0-510 (all answer) found
+  the same map. The hydro/wind settings sit at the same addresses: register 390 bit 0 / bit 1 = PV1 / PV2 wind mode,
+  392-403 = curve voltages V1-V12 in 0.1 V, 404-415 = curve currents 1-12 in 0.1 A (checked against the Sol-Ark app).
+  Each change to these is an inverter EEPROM write, so set them by hand, not from a frequent automation.
 
 ## Keeping history when changing these files
 
@@ -53,6 +64,9 @@ a new entity at every site and its old history stops. So:
 - Sites move to a new version by changing `ref:`, one site at a time.
 
 ## Changes
+
+- **v1.3.0** (2026-11-19): `common/register-sweep.yaml`, the read-only register sweep. README: the 12K US files also fit
+  the Sol-Ark 15K-2P, with its hydro/wind registers.
 
 - **v1.2.0** (2026-11-19): `models/12k-us/faults.yaml`. Fault words 103-106 decoded to F01-F64 with the 12K US
   firmware's own fault names ("Fault information complete register", "Fault Codes"), read every 3 s in one request;
